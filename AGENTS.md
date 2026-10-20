@@ -11,9 +11,9 @@ UniOne Spring Boot — Spring Boot integration of the UniOne Java SDK (``) for t
   mvn -q -DskipTests package
   ```
 
-- **Source label.** Every request carries the query parameter `platform=spring.2.1.2,java-sdk.2.1.2` (this package, then the SDK it is built on).
+- **Source label.** Every request carries the query parameter `platform=spring.2.1.3,java-sdk.2.1.3` (this package, then the SDK it is built on).
 - **Tests.** Before a release the generator installs the package into a test app of Spring Boot and checks the client, the webhook endpoint and the mailer against a mock of the API: no real API key, no real sends.
-- **Release.** The version (2.1.2 in pom.xml) and the tag `v2.1.2` come from the generator; README.md states the Web API version the release was generated from.
+- **Release.** The version (2.1.3 in pom.xml) and the tag `v2.1.3` come from the generator; README.md states the Web API version the release was generated from.
 - **Secrets.** Never commit API keys; the examples read `UNIONE_API_KEY` from the environment.
 
 ## Integrating UniOne with this package
@@ -27,7 +27,7 @@ Install:
 <dependency>
     <groupId>io.unione</groupId>
     <artifactId>unione-spring-boot-starter</artifactId>
-    <version>2.1.2</version>
+    <version>2.1.3</version>
 </dependency>
 ```
 

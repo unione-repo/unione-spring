@@ -1,4 +1,4 @@
-# UniOne Spring Boot 2.1.2
+# UniOne Spring Boot 2.1.3
 
 Web API 1.90
 
@@ -13,7 +13,7 @@ Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/
 <dependency>
     <groupId>io.unione</groupId>
     <artifactId>unione-spring-boot-starter</artifactId>
-    <version>2.1.2</version>
+    <version>2.1.3</version>
 </dependency>
 ```
 
