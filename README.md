@@ -1,10 +1,10 @@
-# UniOne Spring Boot 2.1.3
+# UniOne Spring Boot
 
-Web API 1.90
-
-Quickstart guide: [Send emails with Java](https://docs.unione.io/en/send-with-java) · Docs for LLMs: [llms.txt](https://docs.unione.io/llms.txt) · [API reference](https://docs.unione.io/en/web-api-ref)
+[![Spring Boot](https://img.shields.io/maven-central/v/io.unione/unione-spring-boot-starter)](https://central.sonatype.com/artifact/io.unione/unione-spring-boot-starter) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/unione-java-sdk) (``): the API client in the application context (auto-configuration), a webhook endpoint with signature check, a JavaMailSender transport that sends through `email/send`.
+
+[API reference](https://docs.unione.io/en/web-api-ref) · Docs for LLMs: [llms.txt](https://docs.unione.io/llms.txt)
 
 ## Install
 
@@ -13,28 +13,19 @@ Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/
 <dependency>
     <groupId>io.unione</groupId>
     <artifactId>unione-spring-boot-starter</artifactId>
-    <version>2.1.3</version>
+    <version>2.2.3</version>
 </dependency>
 ```
 
 Requirements: Java 17+, Spring Boot 3.
 
-## Get an API key
+## Configuration
 
-1. Sign up at [cp.unione.io](https://cp.unione.io/en/user/registration/).
-2. Copy your API key from [Settings → Security → API](https://cp.unione.io/en/settings/security/api).
-3. Put it in an environment variable:
+Get an API key in the [control panel](https://cp.unione.io/en/settings/security/api) and keep it in the environment, never in code:
 
 ```bash
 export UNIONE_API_KEY="your-api-key"
 ```
-
-The package reads it from `UNIONE_API_KEY` (see the configuration below).
-
-> **Server-side only.** Use this package in backend code: API routes, server functions, workers.
-> Never ship the API key to a browser or a mobile app, and never commit it.
-
-## Configuration
 
 Settings are read from the environment by default:
 
@@ -50,6 +41,8 @@ unione:
     enabled: true
 ```
 
+`us1.unione.io` in the example is for an account on another datacenter; without the host setting the package uses `api.unione.io`.
+
 | Option | Environment variable | Default | Description |
 |---|---|---|---|
 | `unione.api-key` | `UNIONE_API_KEY` |  | User or project API key (required). |
@@ -60,58 +53,72 @@ unione:
 
 The `UNIONE_*` variables are read when the `unione.*` property is not set. `unione.webhook.enabled=false` turns off the webhook controller, `unione.mail.enabled=false` the mail sender (it is registered when `spring-boot-starter-mail` is on the classpath and there is no other `MailSender` bean).
 
-## Send your first email — no DNS setup
+## Sending mail
 
-Every account can send test email right away from a **sandbox domain**: pre-verified, DKIM and SPF already set.
-It delivers only to addresses you confirm.
+Messages of the JavaMailSender go through [email/send](https://docs.unione.io/en/web-api-ref#email-send): from, to/cc/bcc, reply-to, subject, HTML and text parts, attachments, inline images and `X-*` headers.
 
-The examples use the API client of the package (see the configuration above).
+```java
+@Autowired
+private JavaMailSender mailSender;
 
-**1. Get your sandbox domain** (`domain/get-sandbox-domain`). The call creates the domain on first use and returns the same one afterwards.
+MimeMessage message = mailSender.createMimeMessage();
+MimeMessageHelper helper = new MimeMessageHelper(message, true);
+helper.setFrom("shop@example.com", "Shop");
+helper.setTo("user@example.com");
+helper.setSubject("Order shipped");
+helper.setText("<b>Your order is on the way</b>", true);
+message.setHeader("X-Order", "42");
+mailSender.send(message);
+```
+
+No verified domain yet? Send from the [test sandbox domain](#no-domain-yet-the-test-sandbox-domain).
+
+## Webhooks
+
+The endpoint answers `GET` with 200 OK (the URL check of [webhook/set](https://docs.unione.io/en/web-api-ref#webhook-set)) and accepts the `POST` notifications: it checks the `auth` field (MD5 of the request body in which the `auth` value is replaced by the API key), answers 401 to a wrong signature, and passes the notification and each of its events to the application.
+
+```java
+import io.unione.wrapper.WebhookEventReceivedEvent;
+
+@Component
+public class DeliveryListener {
+    @EventListener
+    public void onEvent(WebhookEventReceivedEvent e) {
+        var data = e.getEvent().getEventData();
+        log.info("UniOne event {}: {} {}", e.getEvent().getEventName(), data.getEmail(), data.getStatus());
+    }
+}
+```
+
+Register the URL of the endpoint with `webhook/set`, e.g. `https://example.com/unione/webhook`.
+
+> **Answer 200 within 3 seconds** and process the events in the background (a queue): otherwise UniOne repeats the request every 10 minutes for 24 hours (`retry_count` grows), and a handler that failed every request for at least 10 events of a day is turned inactive. The handler must take at least **5 parallel requests of up to 100 events each**; deduplicate, a repeat delivers the same events again.
+
+## API client
+
+Every section of the API is available on the client, see the [SDK docs](https://github.com/unione-repo/unione-java-sdk).
 
 ```java
 import io.unione.UniOneClient;
 
 @Service
-public class MailService {
+public class UsageService {
     private final UniOneClient client;
 
-    public MailService(UniOneClient client) {
+    public UsageService(UniOneClient client) {
         this.client = client;
     }
 
-    public String getSandboxDomain() {
-        var response = client.domain().getSandboxDomain();
-        return response.getDomain();
+    public Integer emailsSent() {
+        var accounting = client.system().info().getAccounting();
+        return accounting == null ? null : accounting.getEmailsSent();
     }
 }
 ```
 
-**2. Confirm your inbox** (`confirmed-email/create`). UniOne sends a confirmation email; click the link in it within 48 hours.
+### Sending through the API
 
-```java
-import io.unione.UniOneClient;
-import io.unione.api.confirmedemail.model.ConfirmedEmailRequest;
-
-@Service
-public class MailService {
-    private final UniOneClient client;
-
-    public MailService(UniOneClient client) {
-        this.client = client;
-    }
-
-    public String confirmEmail() {
-        var response = client.confirmedEmail().create(new ConfirmedEmailRequest()
-            .setEmail("you@example.com"));
-        return response.getStatus();
-    }
-}
-```
-
-Check the status with `confirmed-email/list` — your address should show `"status": "confirmed"`.
-
-**3. Send the email** (`email/send`) from any address on the sandbox domain to the confirmed address.
+Besides the JavaMailSender, mail can be sent through the API client directly. The client calls [email/send](https://docs.unione.io/en/web-api-ref#email-send) with all of its options: templates, substitutions, metadata, tracking. Fields of the request and other examples: [Java SDK docs](https://github.com/unione-repo/unione-java-sdk/blob/HEAD/docs/Email.md#send).
 
 ```java
 import io.unione.UniOneClient;
@@ -120,6 +127,7 @@ import io.unione.api.email.model.MessageObject;
 import io.unione.api.email.model.MessageObjectRecipientsItem;
 import io.unione.common.model.BodyObject;
 import java.util.List;
+import org.springframework.stereotype.Service;
 
 @Service
 public class MailService {
@@ -129,44 +137,74 @@ public class MailService {
         this.client = client;
     }
 
-    public String send() {
-        var response = client.email().send(new EmailSendRequest()
-            .setMessage(new MessageObject()
-                    .setRecipients(List.of(
-                            new MessageObjectRecipientsItem()
-                                .setEmail("you@example.com")))
-                    .setBody(new BodyObject()
-                            .setHtml("<p>It works!</p>"))
-                    .setSubject("Hello from UniOne")
-                    .setFromEmail("noreply@<sandbox-domain>")));
-        return response.getJobId();
+    public void send() {
+        var response = client.email().send(new EmailSendRequest().setMessage(new MessageObject()
+            .setRecipients(List.of(MessageObjectRecipientsItem.fromAddress("Alex <alex@example.com>")))
+            .setFromEmail("shop@example.com")
+            .setFromName("Shop")
+            .setSubject("Your order")
+            .setBody(BodyObject.html("<p>Hello, {{to_name}}! Your order has shipped.</p>"))));
+        System.out.println(response.getJobId());
     }
 }
 ```
 
-### What you get back
+## No domain yet: the test sandbox domain
 
-```json
-{
-  "status": "success",
-  "job_id": "1ZymBc-00041N-9X",
-  "emails": [
-    "you@example.com"
-  ]
+Until your domain is verified, send from the **sandbox domain**: a test domain every account has, already verified, with DKIM and SPF set. It delivers only to addresses you confirm (the confirmation link comes by email, valid 48 hours), up to 100 emails a day. The sandbox domain is deleted 31 days after it was created, but you can get it again: the next `domain/get-sandbox-domain` call creates a new one (with a new name, so read it from the call, do not hardcode it).
+
+The examples use the API client of the package (see the configuration above).
+
+```java
+import io.unione.UniOneClient;
+import io.unione.api.confirmedemail.model.ConfirmedEmailRequest;
+import io.unione.api.email.model.EmailSendRequest;
+import io.unione.api.email.model.MessageObject;
+import io.unione.api.email.model.MessageObjectRecipientsItem;
+import io.unione.common.model.BodyObject;
+import java.util.List;
+import org.springframework.stereotype.Service;
+
+@Service
+public class SandboxService {
+    private final UniOneClient client;
+
+    public SandboxService(UniOneClient client) {
+        this.client = client;
+    }
+
+    public void send() {
+        // 1. Your sandbox domain: created on the first call, the same one afterwards
+        var domain = client.domain().getSandboxDomain().getDomain();
+
+        // 2. Confirm your inbox: UniOne sends a link, click it within 48 hours
+        client.confirmedEmail().create(new ConfirmedEmailRequest().setEmail("you@example.com"));
+
+        // 3. Send from any address on the sandbox domain to the confirmed one
+        client.email().send(new EmailSendRequest().setMessage(new MessageObject()
+            .setRecipients(List.of(MessageObjectRecipientsItem.fromAddress("you@example.com")))
+            .setFromEmail("noreply@" + domain)
+            .setSubject("Hello from UniOne")
+            .setBody(BodyObject.html("<p>It works!</p>"))));
+    }
 }
 ```
 
-On error the API returns `status: "error"`, a `message` and a numeric `code`:
+<details>
+<summary>Sandbox limits</summary>
 
-```json
-{
-  "status": "error",
-  "code": 102,
-  "message": "Error ID:83274F98-C7D5-11F1-B221-6214FF8707B1. Can not decode key wrongkey"
-}
-```
+- Sends only to confirmed addresses: up to 10 per account.
+- Up to 100 emails a day.
+- The sandbox domain expires after 31 days; call `domain/get-sandbox-domain` again to get a new one.
+- Works only with the account API key, not a project key.
+- Not listed in `domain/list`; the other `domain/*` methods do not apply to it.
 
-### Same flow with curl
+The sandbox is for development and testing. Do not use a sandbox domain as the sender in production.
+
+</details>
+
+<details>
+<summary>The same with curl</summary>
 
 ```bash
 BASE=https://api.unione.io/en/transactional/api/v1
@@ -196,149 +234,35 @@ curl -s -X POST $BASE/email/send.json \
       }'
 ```
 
-## Sending mail
+</details>
 
-Messages of the JavaMailSender go through [email/send](https://docs.unione.io/en/web-api-ref#email-send): from, to/cc/bcc, reply-to, subject, HTML and text parts, attachments, inline images and `X-*` headers.
+## Going to production
 
-```java
-@Autowired
-private JavaMailSender mailSender;
+**1. Verify your sending domain.** `domain/get-dns-records` returns the verification record, the DKIM key and the DMARC target; add the records at your DNS provider, then `domain/validate-verification-record` and `domain/validate-dkim`.
 
-MimeMessage message = mailSender.createMimeMessage();
-MimeMessageHelper helper = new MimeMessageHelper(message, true);
-helper.setFrom("shop@example.com", "Shop");
-helper.setTo("user@example.com");
-helper.setSubject("Order shipped");
-helper.setText("<b>Your order is on the way</b>", true);
-message.setHeader("X-Order", "42");
-mailSender.send(message);
-```
+| Type | Host | Value | Where it comes from |
+|---|---|---|---|
+| TXT | `@` | `unione-validate-hash=…` | `verification-record` of the response, as is |
+| TXT | `<selector>._domainkey` (the selector is on the domain page of the control panel, e.g. `us`) | `v=DKIM1; k=rsa; p=<dkim>` | `dkim` of the response after `v=DKIM1; k=rsa; p=` |
+| TXT | `@` | `v=spf1 include:spf.unione.io ~all` | not in the response; add the include to your SPF record if you have one |
+| CNAME | `_dmarc` | `<domain>.dmarc.…` | `dmarc` of the response (UniOne publishes the DMARC policy); keep your own DMARC TXT record instead if the domain has one |
 
-## Webhooks
+**2. Make sending reliable.**
 
-The endpoint answers `GET` with 200 OK (the URL check of [webhook/set](https://docs.unione.io/en/web-api-ref#webhook-set)) and accepts the `POST` notifications: it checks the `auth` field (MD5 of the request body in which the `auth` value is replaced by the API key), answers 401 to a wrong signature, and passes the notification and each of its events to the application.
+| | |
+|---|---|
+| Retries | `429` and `5xx` with backoff and the same `idempotence_key`; fix other errors instead of retrying |
+| Limits | 500 recipients and 10 MB per request, attachments included: base64 makes a file about a third larger |
+| Body | always `html` or `plaintext` (a template can supply it) |
+| Delivery status | a webhook, not polling |
+| Queue | send from a background job, not inside the web request |
+| Config | `from_email` from config, so the sandbox → production switch needs no code change |
+| Defaults | keep the unsubscribe footer and tracking; changing them needs UniOne support |
 
-```java
-import io.unione.wrapper.WebhookEventReceivedEvent;
+## Help
 
-@Component
-public class DeliveryListener {
-    @EventListener
-    public void onEvent(WebhookEventReceivedEvent e) {
-        var data = e.getEvent().getEventData();
-        log.info("UniOne event {}: {} {}", e.getEvent().getEventName(), data.getEmail(), data.getStatus());
-    }
-}
-```
-
-Register the URL of the endpoint with `webhook/set`, e.g. `https://example.com/unione/webhook`.
-
-## API client
-
-Every section of the API is available on the client, see the [SDK docs](https://github.com/unione-repo/unione-java-sdk).
-
-```java
-import io.unione.UniOneClient;
-
-@Service
-public class UsageService {
-    private final UniOneClient client;
-
-    public UsageService(UniOneClient client) {
-        this.client = client;
-    }
-
-    public Integer emailsSent() {
-        var accounting = client.system().info().getAccounting();
-        return accounting == null ? null : accounting.getEmailsSent();
-    }
-}
-```
-
-## Sending through the API
-
-Besides the JavaMailSender, mail can be sent through the API client directly. The client calls [email/send](https://docs.unione.io/en/web-api-ref#email-send) with all of its options: templates, substitutions, metadata, tracking. Fields of the request and other examples: [Java SDK docs](https://github.com/unione-repo/unione-java-sdk/blob/HEAD/docs/Email.md#send).
-
-```java
-import io.unione.UniOneClient;
-import io.unione.api.email.model.EmailSendRequest;
-import io.unione.api.email.model.MessageObject;
-import io.unione.api.email.model.MessageObjectRecipientsItem;
-import io.unione.common.model.BodyObject;
-import java.util.List;
-import java.util.Map;
-
-@Service
-public class MailService {
-    private final UniOneClient client;
-
-    public MailService(UniOneClient client) {
-        this.client = client;
-    }
-
-    public String send() {
-        var response = client.email().send(new EmailSendRequest()
-            .setMessage(new MessageObject()
-                    .setRecipients(List.of(
-                            new MessageObjectRecipientsItem()
-                                .setEmail("user@example.com")
-                                .setSubstitutions(Map.of(
-                                        "CustomerId", "12452",
-                                        "to_name", "John Smith"))))
-                    .setBody(new BodyObject()
-                            .setHtml("<b>Hello, {{to_name}}</b>")
-                            .setPlaintext("Hello, {{to_name}}"))
-                    .setSubject("UniOne test email ")
-                    .setFromEmail("email@example.com")
-                    .setFromName("John Smith")));
-        return response.getJobId();
-    }
-}
-```
-
-## Sandbox limits
-
-- Sends only to confirmed addresses: up to 10 per account.
-- Up to 100 emails a day.
-- The sandbox domain expires after 31 days; call `domain/get-sandbox-domain` again to get a new one.
-- Works only with the account API key, not a project key.
-- Not listed in `domain/list`; the other `domain/*` methods do not apply to it.
-
-The sandbox is for development and testing. Do not use a sandbox domain as the sender in production.
-
-## Before production: verify your domain
-
-1. `domain/get-dns-records` — returns the values for your DNS records.
-2. Add these records at your DNS provider (the domain page of the control panel shows them too):
-
-   | Type | Host | Value |
-   |---|---|---|
-   | TXT | `@` | the `verification-record` value (`unione-validate-hash=…`) |
-   | TXT | `<selector>._domainkey` (the selector is on the domain page of the control panel, e.g. `us`) | `v=DKIM1; k=rsa; p=<dkim>` |
-   | TXT | `@` | `v=spf1 include:spf.unione.io ~all` |
-   | CNAME | `_dmarc` | the `dmarc` value |
-
-3. `domain/validate-verification-record`, then `domain/validate-dkim`.
-4. `domain/list` — wait until the verification record is confirmed and DKIM is active.
-5. Read `from_email` from your config, so switching from the sandbox needs no code change.
-
-## Sending reliably
-
-- **Retries:** set `message.idempotence_key` on sends that may be retried, so a repeated request does not send twice.
-- **Limits:** up to 500 recipients and 10 MB per request; each attachment up to 7 MB.
-- **Body:** always include `body.html` or `body.plaintext`.
-- **Delivery status:** register a webhook (`webhook/set`) with a fast, idempotent HTTPS handler instead of polling.
-- **Defaults:** keep the default unsubscribe footer and tracking; changing them requires UniOne support.
-- **Errors:** retry `429` and `5xx` with backoff; do not retry other errors unchanged.
-
-## Links
-
-- [Send emails with Java](https://docs.unione.io/en/send-with-java) and other [integration guides](https://docs.unione.io/en/integrations/)
-- [Web API reference](https://docs.unione.io/en/web-api-ref)
-- [llms.txt](https://docs.unione.io/llms.txt) for AI coding agents
-- [UniOne MCP server and agent setup](https://unione.io/en/agents)
-- [Support](https://cp.unione.io/en/support)
-
-## For package contributors
-
-See [AGENTS.md](AGENTS.md): how this package is generated from the OpenAPI spec, built, tested and released.
+- [Integration guides](https://docs.unione.io/en/integrations)
+- [Java SDK](https://github.com/unione-repo/unione-java-sdk)
+- AI coding agents: [llms.txt](https://docs.unione.io/llms.txt), the [MCP server](https://unione.io/en/agents), skills: `npx skills add https://github.com/unione-repo/unione-skills.git`
+- [Support](https://cp.unione.io/en/support) · [Issues](https://github.com/unione-repo/unione-spring/issues)
+- Contributing: [AGENTS.md](AGENTS.md) — the package is generated from the OpenAPI spec.
