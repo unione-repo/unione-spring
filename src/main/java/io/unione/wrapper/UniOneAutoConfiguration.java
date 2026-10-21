@@ -45,7 +45,7 @@ public class UniOneAutoConfiguration {
         if (apiKey == null) {
             throw new IllegalStateException("UniOne: set the API key (unione.api-key or UNIONE_API_KEY)");
         }
-        Configuration config = new Configuration(apiKey).setPlatform("spring.2.2.3");
+        Configuration config = new Configuration(apiKey).setPlatform("spring.2.2.4");
         String host = setting(properties.getHost(), environment, "UNIONE_HOST");
         if (host != null) {
             config.setBaseUrl(Configuration.baseUrlFor(host));
