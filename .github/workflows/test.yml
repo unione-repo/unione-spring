@@ -11,38 +11,47 @@ on:
 permissions:
   contents: read
 
+# a new push of the ref cancels the run of the previous one (called by release.yml: the group of the tag)
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the SDK io.unione:unione-java-sdk 2.3.1 in Maven Central
+        timeout-minutes: 15
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsSL -A "release-workflow (github.com/$GITHUB_REPOSITORY)" -o /tmp/sdk "https://repo1.maven.org/maven2/io/unione/unione-java-sdk/2.3.1/unione-java-sdk-2.3.1.pom"; then
+              echo "io.unione:unione-java-sdk 2.3.1 is in Maven Central"; exit 0
+            fi
+            echo "io.unione:unione-java-sdk 2.3.1 is not in Maven Central yet ($i/20)"; sleep 30
+          done
+          echo "::error::io.unione:unione-java-sdk 2.3.1 did not appear in Maven Central in 10 min: publish the SDK first"; exit 1
   test:
+    needs: sdk
     runs-on: ubuntu-22.04
-    timeout-minutes: 140
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
         v: ["17", "21"]
     steps:
       - uses: actions/checkout@v4
-      - name: Wait for the SDK io.unione:unione-java-sdk 2.3.0 in Maven Central
-        timeout-minutes: 95
-        run: |
-          for i in $(seq 1 180); do
-            if curl -fsSL -A "release-workflow (github.com/$GITHUB_REPOSITORY)" -o /tmp/sdk "https://repo1.maven.org/maven2/io/unione/unione-java-sdk/2.3.0/unione-java-sdk-2.3.0.pom"; then
-              echo "io.unione:unione-java-sdk 2.3.0 is in Maven Central"; exit 0
-            fi
-            echo "io.unione:unione-java-sdk 2.3.0 is not in Maven Central yet ($i/180)"; sleep 30
-          done
-          echo "::error::io.unione:unione-java-sdk 2.3.0 did not appear in Maven Central in 90 min: publish the SDK first"; exit 1
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: ${{ matrix.v }}
           cache: maven
       - name: Install the dependencies (the mirrors of the registry may serve the SDK some minutes later)
-        timeout-minutes: 25
+        timeout-minutes: 15
         run: |
-          for i in $(seq 1 40); do
+          for i in $(seq 1 20); do
             if ( mvn -B -ntp -U dependency:resolve ); then exit 0; fi
-            echo "the dependencies can not be installed yet ($i/40)"; sleep 30
+            echo "the dependencies can not be installed yet ($i/20)"; sleep 30
           done
-          echo "::error::the dependencies (the SDK) can not be installed in 20 min"; exit 1
+          echo "::error::the dependencies (the SDK) can not be installed in 10 min"; exit 1
       - run: |
           mvn -B -ntp test

@@ -29,7 +29,7 @@ class UniOneAutoConfigurationTest {
                 assertThat(config.getApiKey()).isEqualTo("test-key");
                 assertThat(config.getBaseUrl()).isEqualTo("http://127.0.0.1:9/api");
                 assertThat(config.getTimeout()).isEqualTo(Duration.ofMillis(2500));
-                assertThat(config.getPlatform()).isEqualTo("spring.2.3.1," + ApiClient.PLATFORM);
+                assertThat(config.getPlatform()).isEqualTo("spring.2.3.2," + ApiClient.PLATFORM);
             });
     }
 
