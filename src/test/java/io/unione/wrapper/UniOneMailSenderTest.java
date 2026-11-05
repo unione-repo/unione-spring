@@ -73,7 +73,7 @@ class UniOneMailSenderTest {
     private Map<String, Object> sentMessage() {
         assertThat(requests).hasSize(1);
         String request = requests.get(0);
-        String platform = URLEncoder.encode("spring.2.3.0," + ApiClient.PLATFORM, StandardCharsets.UTF_8);
+        String platform = URLEncoder.encode("spring.2.3.1," + ApiClient.PLATFORM, StandardCharsets.UTF_8);
         assertThat(request).startsWith("/email/send.json?platform=" + platform + " test-key ");
         Map<String, Object> body = Json.asMap(Json.parse(request.substring(request.indexOf(" {") + 1)));
         return (Map<String, Object>) body.get("message");

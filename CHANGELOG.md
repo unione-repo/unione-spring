@@ -2,6 +2,12 @@
 
 All notable changes of this package. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [2.3.1](https://github.com/unione-repo/unione-spring/releases/tag/v2.3.1) - 2026-11-05
+
+### Fixed
+
+- The tests of the CI workflow retry the installation of the dependencies until the mirrors of the registry serve the new SDK version.
+
 ## [2.3.0](https://github.com/unione-repo/unione-spring/releases/tag/v2.3.0) - 2026-11-05
 
 ### Added

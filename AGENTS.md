@@ -13,7 +13,7 @@ Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/
 <dependency>
     <groupId>io.unione</groupId>
     <artifactId>unione-spring-boot-starter</artifactId>
-    <version>2.3.0</version>
+    <version>2.3.1</version>
 </dependency>
 ```
 
@@ -149,7 +149,7 @@ Register the URL of the endpoint with `webhook/set`, e.g. `https://example.com/u
   mvn -q -DskipTests package
   ```
 
-- **Source label.** Every request carries the query parameter `platform=spring.2.3.0,java-sdk.2.3.0` (this package, then the SDK it is built on).
+- **Source label.** Every request carries the query parameter `platform=spring.2.3.1,java-sdk.2.3.0` (this package, then the SDK it is built on).
 - **Tests.** `mvn -B -ntp test` runs the tests of the package (with the test tools of Spring Boot, not published) offline: the API is faked, never the real API, no real key; they install the SDK version the package requires from the registry. Before a release the generator also installs the package into a test app of Spring Boot and checks the client, the webhook endpoint and the mailer against a mock of the API. The CI (.github/workflows/test.yml) runs the tests on every push and pull request over the supported runtimes; release.yml publishes a tag only after they pass.
-- **Release.** The version (2.3.0 in pom.xml) and the tag `v2.3.0` come from the generator; README.md states the Web API version the release was generated from.
+- **Release.** The version (2.3.1 in pom.xml) and the tag `v2.3.1` come from the generator; README.md states the Web API version the release was generated from.
 - **Secrets.** Never commit API keys; the examples read `UNIONE_API_KEY` from the environment.
