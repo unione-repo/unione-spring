@@ -2,7 +2,7 @@
 
 [![Spring Boot](https://img.shields.io/maven-central/v/io.unione/unione-spring-boot-starter)](https://central.sonatype.com/artifact/io.unione/unione-spring-boot-starter) [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/unione-java-sdk) (``): the API client in the application context (auto-configuration), a webhook endpoint with signature check, a JavaMailSender transport that sends through `email/send`.
+Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/unione-java-sdk) (`io.unione:unione-java-sdk`): the API client in the application context (auto-configuration), a webhook endpoint with signature check, a JavaMailSender transport that sends through `email/send`.
 
 [API reference](https://docs.unione.io/en/web-api-ref) · Docs for LLMs: [llms.txt](https://docs.unione.io/llms.txt)
 
@@ -13,7 +13,7 @@ Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/
 <dependency>
     <groupId>io.unione</groupId>
     <artifactId>unione-spring-boot-starter</artifactId>
-    <version>2.2.4</version>
+    <version>2.3.0</version>
 </dependency>
 ```
 
@@ -51,7 +51,7 @@ unione:
 | `unione.webhook.key` | `UNIONE_WEBHOOK_KEY` |  | API key the webhooks are signed with (the key of the user/project of the webhook), if it differs from the API key. |
 | `unione.webhook.path` | `UNIONE_WEBHOOK_PATH` | `/unione/webhook` | Path of the webhook endpoint. |
 
-The `UNIONE_*` variables are read when the `unione.*` property is not set. `unione.webhook.enabled=false` turns off the webhook controller, `unione.mail.enabled=false` the mail sender (it is registered when `spring-boot-starter-mail` is on the classpath and there is no other `MailSender` bean).
+The `UNIONE_*` variables are read when the `unione.*` property is not set. `unione.webhook.enabled=false` turns off the webhook controller, `unione.mail.enabled=false` the mail sender (it is registered when `spring-boot-starter-mail` is on the classpath and there is no other `MailSender` bean). With Spring Security the webhook path gets its own `SecurityFilterChain` bean `unioneWebhookSecurityFilterChain`: CSRF off, every request permitted, this path only (the notifications are checked by their signature); define a bean with that name to replace it.
 
 ## Sending mail
 
@@ -148,6 +148,10 @@ public class MailService {
     }
 }
 ```
+
+### Errors
+
+A failed send throws the `MailSendException` of Spring; its `getCause()` is the SDK `ApiException`: `getKind()`, `isRetryable()` (network, timeout, HTTP 429 and 5xx), `getHint()`, `getApiMessage()`. The API client throws the `ApiException` itself.
 
 ## No domain yet: the test sandbox domain
 

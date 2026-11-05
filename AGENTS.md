@@ -1,10 +1,10 @@
 # AGENTS.md
 
-UniOne Spring Boot — Spring Boot integration of the UniOne Java SDK (``) for the UniOne transactional email Web API (Web API 1.90). How to integrate UniOne into a Spring Boot application comes first; the last section is about changing this package.
+UniOne Spring Boot — Spring Boot integration of the UniOne Java SDK (`io.unione:unione-java-sdk`) for the UniOne transactional email Web API (Web API 1.92). How to integrate UniOne into a Spring Boot application comes first; the last section is about changing this package.
 
 ## Integrating UniOne with this package
 
-Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/unione-java-sdk) (``): the API client in the application context (auto-configuration), a webhook endpoint with signature check, a JavaMailSender transport that sends through `email/send`. Full guide: [README.md](README.md).
+Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/unione-java-sdk) (`io.unione:unione-java-sdk`): the API client in the application context (auto-configuration), a webhook endpoint with signature check, a JavaMailSender transport that sends through `email/send`. Full guide: [README.md](README.md).
 
 ### Install
 
@@ -13,7 +13,7 @@ Spring Boot integration of the [UniOne Java SDK](https://github.com/unione-repo/
 <dependency>
     <groupId>io.unione</groupId>
     <artifactId>unione-spring-boot-starter</artifactId>
-    <version>2.2.4</version>
+    <version>2.3.0</version>
 </dependency>
 ```
 
@@ -44,6 +44,8 @@ unione:
 | `unione.timeout` | `UNIONE_TIMEOUT` | `30` | Request timeout, seconds. |
 | `unione.webhook.key` | `UNIONE_WEBHOOK_KEY` |  | API key the webhooks are signed with (the key of the user/project of the webhook), if it differs from the API key. |
 | `unione.webhook.path` | `UNIONE_WEBHOOK_PATH` | `/unione/webhook` | Path of the webhook endpoint. |
+
+The `UNIONE_*` variables are read when the `unione.*` property is not set. `unione.webhook.enabled=false` turns off the webhook controller, `unione.mail.enabled=false` the mail sender (it is registered when `spring-boot-starter-mail` is on the classpath and there is no other `MailSender` bean). With Spring Security the webhook path gets its own `SecurityFilterChain` bean `unioneWebhookSecurityFilterChain`: CSRF off, every request permitted, this path only (the notifications are checked by their signature); define a bean with that name to replace it.
 
 ### Sending mail
 
@@ -96,6 +98,10 @@ public class MailService {
 }
 ```
 
+### Errors
+
+A failed send throws the `MailSendException` of Spring; its `getCause()` is the SDK `ApiException`: `getKind()`, `isRetryable()` (network, timeout, HTTP 429 and 5xx), `getHint()`, `getApiMessage()`. The API client throws the `ApiException` itself.
+
 ### Webhooks
 
 The endpoint answers `GET` with 200 OK (the URL check of [webhook/set](https://docs.unione.io/en/web-api-ref#webhook-set)) and accepts the `POST` notifications: it checks the `auth` field (MD5 of the request body in which the `auth` value is replaced by the API key), answers 401 to a wrong signature, and passes the notification and each of its events to the application.
@@ -123,7 +129,7 @@ Register the URL of the endpoint with `webhook/set`, e.g. `https://example.com/u
 - Base URL `https://api.unione.io/en/transactional/api/v1` (an account registered on another host uses that one: `eu1.unione.io`, `us1.unione.io`); every method is POST with a JSON body; auth header `X-API-KEY`. The package does all of it.
 - First email without DNS: `domain/get-sandbox-domain` → `confirmed-email/create` (the user clicks the link within 48 hours) → `email/send` from `noreply@<sandbox-domain>` to the confirmed address. Account API key only; up to 10 confirmed addresses, 100 emails a day. The domain is deleted 31 days after it was created: the next `domain/get-sandbox-domain` call creates a new one with another name, so read the name from the response, never hardcode it.
 - Never ship a sandbox domain as the production sender (it is not in `domain/list`); read `from_email` from config. Production needs a verified domain: `domain/get-dns-records` → DNS records (verification TXT as is, DKIM TXT `v=DKIM1; k=rsa; p=<dkim>` on `<selector>._domainkey`, CNAME `_dmarc` → the `dmarc` field; SPF `include:spf.unione.io` is not in the response) → `domain/validate-verification-record`, `domain/validate-dkim` → `domain/list`.
-- Set `message.idempotence_key` on retryable sends; retry network errors, `429` and `5xx` with backoff, not other errors unchanged. Up to 500 recipients and 10 MB per request with the attachments in base64 (a third larger than the files); always `body.html` or `body.plaintext`.
+- Set `message.idempotence_key` on every send that may be retried. Retry only an error that is retryable (the retryable flag of the SDK error: network, timeout, `429`, `5xx`; never a request you cancelled), with backoff and the same `idempotence_key`, within the one-minute idempotence window; beyond it check your own "sent" record before sending again. Do not retry other errors unchanged. Up to 500 recipients and 10 MB per request with the attachments in base64 (a third larger than the files); always `body.html` or `body.plaintext` (or a `template_id`).
 - Delivery events via webhook (`webhook/set`), not polling; the webhook endpoint of this package checks the `auth` signature (401 when wrong). Keep the listeners fast: answer 200 within 3 seconds and process the events from a queue, otherwise the request is repeated every 10 minutes for 24 hours; take at least 5 parallel requests of up to 100 events each; deduplicate.
 - Keep the default unsubscribe and tracking behaviour; changes go through UniOne support.
 - Do not invent methods or fields. Check the [README](README.md), the [API reference](https://docs.unione.io/en/web-api-ref) or [llms.txt](https://docs.unione.io/llms.txt).
@@ -136,14 +142,14 @@ Register the URL of the endpoint with `webhook/set`, e.g. `https://example.com/u
 
 ## Working on this repository
 
-- **Generated code.** The whole package is generated by the UniOne team from the UniOne Web API OpenAPI spec (Web API 1.90): sources, docs, README.md and this file. Do not hand-edit it: the next release replaces the content of this repository. Report problems and requests in the issues of this repository (https://github.com/unione-repo/unione-spring).
+- **Generated code.** The whole package is generated by the UniOne team from the UniOne Web API OpenAPI spec (Web API 1.92): sources, docs, README.md and this file. Do not hand-edit it: the next release replaces the content of this repository. Report problems and requests in the issues of this repository (https://github.com/unione-repo/unione-spring).
 - **Build and check:**
 
   ```bash
   mvn -q -DskipTests package
   ```
 
-- **Source label.** Every request carries the query parameter `platform=spring.2.2.4,java-sdk.2.2.4` (this package, then the SDK it is built on).
-- **Tests.** Before a release the generator installs the package into a test app of Spring Boot and checks the client, the webhook endpoint and the mailer against a mock of the API: no real API key, no real sends.
-- **Release.** The version (2.2.4 in pom.xml) and the tag `v2.2.4` come from the generator; README.md states the Web API version the release was generated from.
+- **Source label.** Every request carries the query parameter `platform=spring.2.3.0,java-sdk.2.3.0` (this package, then the SDK it is built on).
+- **Tests.** `mvn -B -ntp test` runs the tests of the package (with the test tools of Spring Boot, not published) offline: the API is faked, never the real API, no real key; they install the SDK version the package requires from the registry. Before a release the generator also installs the package into a test app of Spring Boot and checks the client, the webhook endpoint and the mailer against a mock of the API. The CI (.github/workflows/test.yml) runs the tests on every push and pull request over the supported runtimes; release.yml publishes a tag only after they pass.
+- **Release.** The version (2.3.0 in pom.xml) and the tag `v2.3.0` come from the generator; README.md states the Web API version the release was generated from.
 - **Secrets.** Never commit API keys; the examples read `UNIONE_API_KEY` from the environment.

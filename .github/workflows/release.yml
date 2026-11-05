@@ -1,4 +1,4 @@
-# Generated: publishes the package when a tag v* is pushed. Do not edit, the next release replaces it.
+# Generated: publishes the package when a tag v* is pushed and its tests pass. Do not edit, the next release replaces it.
 name: Release
 
 on:
@@ -10,13 +10,26 @@ permissions:
   id-token: write
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
   release:
+    needs: test
     runs-on: ubuntu-latest
     environment: release
     steps:
       - uses: actions/checkout@v4
       - name: The tag is the version of the package
-        run: test "$GITHUB_REF_NAME" = "v2.2.4" || { echo "tag $GITHUB_REF_NAME, package v2.2.4"; exit 1; }
+        run: test "$GITHUB_REF_NAME" = "v2.3.0" || { echo "tag $GITHUB_REF_NAME, package v2.3.0"; exit 1; }
+      - name: Wait for the SDK io.unione:unione-java-sdk 2.3.0 in Maven Central
+        timeout-minutes: 95
+        run: |
+          for i in $(seq 1 180); do
+            if curl -fsSL -A "release-workflow (github.com/$GITHUB_REPOSITORY)" -o /tmp/sdk "https://repo1.maven.org/maven2/io/unione/unione-java-sdk/2.3.0/unione-java-sdk-2.3.0.pom"; then
+              echo "io.unione:unione-java-sdk 2.3.0 is in Maven Central"; exit 0
+            fi
+            echo "io.unione:unione-java-sdk 2.3.0 is not in Maven Central yet ($i/180)"; sleep 30
+          done
+          echo "::error::io.unione:unione-java-sdk 2.3.0 did not appear in Maven Central in 90 min: publish the SDK first"; exit 1
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -28,9 +41,9 @@ jobs:
       - name: Build and sign the bundle
         run: |
           mvn -B clean package source:jar javadoc:jar -Ddoclint=none
-          D=target/bundle/io/unione/unione-spring-boot-starter/2.2.4 && mkdir -p $D
-          cp target/unione-spring-boot-starter-2.2.4.jar target/unione-spring-boot-starter-2.2.4-sources.jar target/unione-spring-boot-starter-2.2.4-javadoc.jar $D/
-          cp pom.xml $D/unione-spring-boot-starter-2.2.4.pom
+          D=target/bundle/io/unione/unione-spring-boot-starter/2.3.0 && mkdir -p $D
+          cp target/unione-spring-boot-starter-2.3.0.jar target/unione-spring-boot-starter-2.3.0-sources.jar target/unione-spring-boot-starter-2.3.0-javadoc.jar $D/
+          cp pom.xml $D/unione-spring-boot-starter-2.3.0.pom
           cd $D
           for f in *.jar *.pom; do
             gpg --batch --pinentry-mode loopback --passphrase "$MAVEN_GPG_PASSPHRASE" -ab "$f"
@@ -44,7 +57,7 @@ jobs:
         run: |
           TOKEN=$(printf '%s:%s' "$CENTRAL_USER" "$CENTRAL_PASSWORD" | base64 -w0)
           curl --fail-with-body -H "Authorization: Bearer $TOKEN" -F bundle=@target/central-bundle.zip \
-            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC&name=unione-spring-boot-starter-2.2.4"
+            "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC&name=unione-spring-boot-starter-2.3.0"
         env:
           CENTRAL_USER: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}

@@ -106,8 +106,8 @@ public class UniOneMailSender implements JavaMailSender {
         try {
             client.call("/email/send.json", body);
         } catch (ApiException e) {
-            throw new MailSendException("Unable to send the email: " + e.getMessage() + " (code "
-                + e.getErrorCode() + ")", e);
+            // the message of the SDK has the method, the API error code and how to fix it
+            throw new MailSendException("Unable to send the email: " + e.getMessage(), e);
         }
     }
 }

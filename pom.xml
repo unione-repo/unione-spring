@@ -6,7 +6,7 @@
 
     <groupId>io.unione</groupId>
     <artifactId>unione-spring-boot-starter</artifactId>
-    <version>2.2.4</version>
+    <version>2.3.0</version>
     <packaging>jar</packaging>
 
     <name>UniOne Spring Boot Starter</name>
@@ -55,7 +55,7 @@
         <dependency>
             <groupId>io.unione</groupId>
             <artifactId>unione-java-sdk</artifactId>
-            <version>2.2.4</version>
+            <version>2.3.0</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -81,5 +81,59 @@
             <artifactId>jakarta.mail-api</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- the webhook path is opened in Spring Security (CSRF off, permitAll) when the application uses it -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-config</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-web</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <!-- tests (src/test, not in the jar): mvn test; the API is a local mock, never called for real -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- META-INF/spring-configuration-metadata.json from UniOneProperties: completion and docs of the
+                 unione.* properties in application.yml (IntelliJ IDEA, VS Code); the explicit processor path also
+                 works on JDK 23+, which runs no annotation processors found on the classpath -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.13.0</version>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-configuration-processor</artifactId>
+                            <version>${spring-boot.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>3.2.5</version>
+            </plugin>
+        </plugins>
+    </build>
 </project>

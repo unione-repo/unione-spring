@@ -1,0 +1,40 @@
+# Generated: the tests of the package on every push and pull request (and before a release). Do not edit, the next
+# release replaces it. The tests need no network: the API is faked.
+name: Tests
+
+on:
+  push:
+    branches: ["**"]  # not the tags: release.yml runs the tests of a tag itself
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        v: ["17", "21"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for the SDK io.unione:unione-java-sdk 2.3.0 in Maven Central
+        timeout-minutes: 95
+        run: |
+          for i in $(seq 1 180); do
+            if curl -fsSL -A "release-workflow (github.com/$GITHUB_REPOSITORY)" -o /tmp/sdk "https://repo1.maven.org/maven2/io/unione/unione-java-sdk/2.3.0/unione-java-sdk-2.3.0.pom"; then
+              echo "io.unione:unione-java-sdk 2.3.0 is in Maven Central"; exit 0
+            fi
+            echo "io.unione:unione-java-sdk 2.3.0 is not in Maven Central yet ($i/180)"; sleep 30
+          done
+          echo "::error::io.unione:unione-java-sdk 2.3.0 did not appear in Maven Central in 90 min: publish the SDK first"; exit 1
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.v }}
+          cache: maven
+      - run: |
+          mvn -B -ntp test

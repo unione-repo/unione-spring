@@ -1,3 +1,4 @@
 io.unione.wrapper.UniOneAutoConfiguration
 io.unione.wrapper.UniOneMailAutoConfiguration
 io.unione.wrapper.UniOneWebhookAutoConfiguration
+io.unione.wrapper.UniOneWebhookSecurityAutoConfiguration
